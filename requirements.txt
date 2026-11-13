@@ -1,0 +1,2 @@
+# 其余部分全部使用 Python 标准库；Pillow 仅用于精灵帧的 Alpha 处理 / 拼图 / GIF
+Pillow>=9.0

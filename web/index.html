@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpriteMaker · 2D 游戏精灵动画制作</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1622'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='%236aa9ff'%3E%E2%97%86%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="logo">◆</span><b>SpriteMaker</b><span class="tagline">2D 精灵动画流水线</span></div>
+    <div class="top-actions">
+      <span id="health" class="pill">检测中…</span>
+      <select id="projectSelect" title="选择项目"><option value="">— 选择项目 —</option></select>
+      <button id="btnNew" class="btn">＋ 新建项目</button>
+      <button id="btnDeleteProject" class="btn ghost danger" title="删除当前项目目录，无法撤销">删除项目</button>
+      <button id="btnSettings" class="btn ghost">设置</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar">
+      <div class="side-title">流水线</div>
+      <button class="step" data-step="reference"><i>1</i><span>正面设定<small>单张正面立绘 · 统一画风</small></span><em></em></button>
+      <button class="step" data-step="keyframe"><i>2</i><span>单帧<small>每个方向一张</small></span><em></em></button>
+      <button class="step" data-step="video"><i>3</i><span>循环视频<small>首帧 + 可选尾帧</small></span><em></em></button>
+      <button class="step" data-step="frames"><i>4</i><span>切帧<small>ffmpeg 抽帧</small></span><em></em></button>
+      <button class="step" data-step="select"><i>5</i><span>挑帧<small>连续播放预览</small></span><em></em></button>
+      <button class="step" data-step="sprites"><i>6</i><span>重绘 / 抠图<small>透明精灵帧</small></span><em></em></button>
+      <button class="step" data-step="export"><i>7</i><span>预览与导出<small>spritesheet / GIF / ZIP</small></span><em></em></button>
+    </nav>
+
+    <main class="content">
+      <div id="empty" class="empty">
+        <h2 id="emptyTitle">还没有项目</h2>
+        <p id="emptyText">新建一个项目，填好角色描述，然后按左侧流水线依次生成。</p>
+        <button class="btn primary" onclick="document.getElementById('btnNew').click()">＋ 新建项目</button>
+      </div>
+
+      <!-- 1 正面设定 -->
+      <section class="panel" data-panel="reference" hidden>
+        <div class="panel-head"><h2>① 正面设定</h2></div>
+        <div class="grid2">
+          <div class="card">
+            <h3>角色设定</h3>
+            <label>角色描述（中文）<textarea data-param="character" rows="4" placeholder="一只蓝色小史莱姆骑士，头戴金色头盔，手拿圆形木盾"></textarea></label>
+            <label>画风 / 风格（中文）<textarea data-param="style" rows="2" placeholder="干净的 2D 游戏精灵，粗描边，赛璐璐上色"></textarea></label>
+            <label>负面提示词（中文）<textarea data-param="negative" rows="2"></textarea></label>
+            <div class="row">
+              <label>画布宽（4:3）<input type="number" data-param="width" step="32" min="512"></label>
+              <label>画布高<input type="number" data-param="height" step="32" min="384"></label>
+              <label>种子（0=随机）<input type="number" data-param="seed"></label>
+            </div>
+
+            <div class="sub-block">
+              <div class="sub-title">可选 · 用底图做图生图</div>
+              <label class="check"><input type="checkbox" data-param="reference_use_image"> 启用上传底图（不勾选 = 纯文生图）</label>
+              <div class="row">
+                <input type="file" id="baseFile" accept="image/png,image/jpeg,image/webp" title="选择角色底图">
+                <button class="btn" id="btnUploadBase">上传</button>
+                <button class="btn ghost" id="btnClearBase">移除</button>
+              </div>
+              <div id="basePreview" class="base-preview muted">未上传底图</div>
+            </div>
+
+            <div class="sub-block">
+              <div class="sub-title">背景策略</div>
+              <label>背景<select data-param="background_mode">
+                <option value="solid">纯色背景（推荐）</option>
+                <option value="transparent">透明 RGBA（可当素材直接复用）</option>
+              </select></label>
+              <label>背景色<div class="color-row">
+                <input type="color" id="bgPicker" value="#00ff00" title="取色">
+                <input type="text" data-param="background_color" placeholder="#00FF00">
+              </div></label>
+              <div class="swatches" id="bgSwatches"></div>
+            </div>
+            <button class="btn primary wide" data-run="reference">生成正面立绘</button>
+          </div>
+          <div class="card">
+            <h3>正面立绘预览</h3>
+            <div id="refSheet" class="ref-sheet muted">尚未生成</div>
+            <div id="refPrompts" class="prompt-box muted">—</div>
+          </div>
+        </div>
+        <h3 class="sec">产物 · 正面立绘</h3>
+        <div id="refFiles" class="media-grid"></div>
+      </section>
+
+      <!-- 2 单帧 -->
+      <section class="panel" data-panel="keyframe" hidden>
+        <div class="panel-head"><h2>② 单帧</h2></div>
+        <div class="grid2 kf-layout">
+          <div class="card">
+            <h3>本批生成哪些方向</h3>
+            <div class="dir-picks" id="dirPicks">
+              <label class="chip-check"><input type="checkbox" data-dir="front" checked><span>正面</span></label>
+              <label class="chip-check"><input type="checkbox" data-dir="back" checked><span>背面</span></label>
+              <label class="chip-check"><input type="checkbox" data-dir="left" checked><span>左侧</span></label>
+              <label class="chip-check"><input type="checkbox" data-dir="right" checked><span>右侧</span></label>
+            </div>
+            <label>武器在哪只手<select data-param="weapon_hand" title="写进单帧提示词：左右侧是镜像关系，不指明手时模型容易换手">
+              <option value="auto">自动（跟随正面图）</option>
+              <option value="left">左手</option>
+              <option value="right">右手</option>
+            </select></label>
+            <div class="sub-block">
+              <div class="sub-title">追加方向</div>
+              <div id="extraViews" class="extra-views muted">无</div>
+              <button class="btn ghost wide" id="btnAddView">＋ 追加一个方向</button>
+            </div>
+            <button class="btn primary wide" data-run="keyframe">生成 / 更新单帧</button>
+            <div id="keyStats" class="stats muted">—</div>
+          </div>
+          <div class="card">
+            <h3>单帧</h3>
+            <div id="keyList" class="key-list"><div class="muted">还没有单帧，先点「生成 / 更新单帧」。</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3 视频 -->
+      <section class="panel" data-panel="video" hidden>
+        <div class="panel-head"><h2>③ 首尾帧循环视频</h2></div>
+        <div class="grid2">
+          <div class="card">
+            <div class="row">
+              <label>首帧<select id="firstKeySelect" data-param="first_frame"><option value="">— 先在 ② 生成 —</option></select></label>
+              <label>尾帧<select id="lastKeySelect" data-param="last_frame"><option value="">同首帧（无缝循环）</option></select></label>
+            </div>
+            <div id="keyPicked" class="pair-picked muted">—</div>
+            <label>视频工作流<select id="videoWorkflow" data-param="video_workflow"><option value="">默认工作流</option></select></label>
+            <label>本段名称（可选）<input data-param="video_label" placeholder="留空自动按「动作 · 方向 · 时间」命名"></label>
+            <label>动作描述（中文）<textarea data-param="video_motion" rows="3" placeholder="点下方快捷按钮，或直接用自己的中文描述"></textarea></label>
+            <div class="preset-block">
+              <div class="preset-label">快捷动作 · 点击自动填写</div>
+              <div id="motionPresets" class="preset-btns"><span class="muted">加载中…</span></div>
+            </div>
+            <div class="row">
+              <label>时长（秒）<input type="number" data-param="video_seconds" step="0.5" min="1" max="10"></label>
+              <label>清晰度 MP<input type="number" data-param="video_megapixels" step="0.05" min="0.05" max="2"></label>
+            </div>
+            <div class="row">
+              <label>留白 左 %<input type="number" data-param="video_pad_left" step="1" min="0" max="45" placeholder="20"></label>
+              <label>留白 右 %<input type="number" data-param="video_pad_right" step="1" min="0" max="45" placeholder="20"></label>
+            </div>
+            <div class="row">
+              <label>留白 上 %<input type="number" data-param="video_pad_top" step="1" min="0" max="45" placeholder="20"></label>
+              <label>留白 下 %<input type="number" data-param="video_pad_bottom" step="1" min="0" max="45" placeholder="20"></label>
+            </div>
+            <label title="0 = 每段自动换种子；填具体数字 = 之后生成都用这个种子，想复现时填回 0 即可恢复自动">视频种子（0=自动）<input type="text" inputmode="numeric" data-param="video_seed" placeholder="0"></label>
+            <label class="check"><input type="checkbox" data-param="video_turbo"> 8 步加速 LoRA（推荐）</label>
+            <label class="check" title="扩画布后按面积同比提高清晰度，上限 1.5 MP"><input type="checkbox" data-param="video_mp_follow"> 清晰度跟随画布</label>
+            <label class="check" title="H3 会原生生成音轨：勾选后提示词写明不要配乐 / 人声，并断开 CreateVideo 的音频输入"><input type="checkbox" data-param="video_silent_audio"> 视频静音</label>
+            <label>自定义视频提示词（中文，留空自动拼接）<textarea data-param="video_prompt" rows="3" placeholder="留空则使用内置中文循环动画模板"></textarea></label>
+            <button class="btn primary wide" data-run="video">＋ 生成新视频段</button>
+          </div>
+          <div class="card">
+            <h3>已有视频段 <span id="videoCount" class="pill">0 段</span></h3>
+            <div id="videoSourceHint" class="source-hint muted">—</div>
+            <div id="videoList" class="video-list muted">尚未生成视频</div>
+            <h3 style="margin-top:14px">视频预览</h3><div id="videoBox" class="video-box muted">尚未生成视频</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4 切帧 -->
+      <section class="panel" data-panel="frames" hidden>
+        <div class="panel-head"><h2>④ ffmpeg 切帧</h2></div>
+        <div class="card">
+          <div class="row">
+            <label style="flex:2">选择要切的视频段<select id="frameSource" data-param="frame_source"><option value="">最新一段</option></select></label>
+            <label>抽取帧率（0=原始）<input type="number" data-param="extract_fps" step="1" min="0" max="60"></label>
+            <label>缩放边长（0=原尺寸）<input type="number" data-param="frame_scale" step="32" min="0"></label>
+          </div>
+          <input type="hidden" id="frameGroupParam" data-param="frame_group">
+          <div id="frameSourceInfo" class="stats muted">—</div>
+          <button class="btn primary wide" data-run="frames">执行切帧（所选视频段）</button>
+          <div id="frameStats" class="stats muted">—</div>
+        </div>
+        <h3 class="sec">帧序列</h3>
+        <div class="toolbar">
+          <span id="frameStripHint" class="muted">—</span>
+          <span class="grow"></span>
+          <button class="btn ghost danger tiny" id="btnClearFrameGroup"
+            title="只删除当前显示的这一组帧（其它视频段不动；它的精灵帧与导出会一并清掉）">删除本组帧</button>
+        </div>
+        <div id="frameStrip" class="strip"></div>
+      </section>
+
+      <!-- 5 挑帧 -->
+      <section class="panel" data-panel="select" hidden>
+        <div class="panel-head"><h2>⑤ 挑帧 · 连续播放预览</h2></div>
+        <div class="select-layout">
+          <div class="player card">
+            <div class="player-row">
+              <button id="btnPlay" class="btn primary">▶ 播放</button>
+              <button id="btnPrev" class="btn">◀ 上一帧</button>
+              <button id="btnNext" class="btn">下一帧 ▶</button>
+              <label class="inline">FPS <input id="playFps" type="number" value="12" min="1" max="60" step="1"></label>
+              <label class="check inline"><input type="checkbox" id="playOnlySelected" checked> 只播放已选帧</label>
+              <span id="playInfo" class="muted">—</span>
+            </div>
+            <div class="canvas-wrap checker"><canvas id="player" width="320" height="320"></canvas></div>
+            <input id="playRange" type="range" min="0" max="0" value="0" class="range">
+          </div>
+          <div class="select-side">
+            <div class="toolbar">
+              <label class="inline">帧组 <select id="frameGroup" title="按视频段切换帧组"></select></label>
+              <span class="sep"></span>
+              <button class="btn" id="btnSelAll" title="选中当前帧组全部帧">全选</button>
+              <button class="btn" id="btnSelNone" title="清空当前帧组的选择，其它帧组保留">清空本组</button>
+              <button class="btn" id="btnSelInvert" title="当前帧组内反选">反选</button>
+              <span class="grow"></span>
+              <span id="selCount" class="pill">已选 0 帧</span>
+            </div>
+            <div class="toolbar toolbar-sub">
+              <label class="inline">均匀抽 <input id="evenN" type="number" value="8" min="1" max="64"> 帧</label>
+              <button class="btn" id="btnSelEven">应用到本组</button>
+              <span class="grow"></span>
+              <button class="btn primary" id="btnSaveSel">保存选择</button>
+            </div>
+            <div id="frameGrid" class="frame-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6 精灵图 -->
+      <section class="panel" data-panel="sprites" hidden>
+        <div class="panel-head"><h2>⑥ 重绘 / 抠图去背景</h2></div>
+        <div class="grid2 side-compact">
+          <div class="card">
+            <label>处理范围<select data-param="sprite_group" id="spriteScope" title="只处理某一段视频的帧，其它组已出的精灵帧原样保留"></select></label>
+            <label>去背景方式<select data-param="sprite_method">
+              <option value="redraw">图生图重绘（默认，最稳）</option>
+              <option value="chroma">色键直接抠背景（自动取样实际色，快且保真）</option>
+            </select></label>
+            <label>重绘提示词（中文，留空用内置模板）<textarea data-param="sprite_prompt" rows="5" placeholder="留空 = 保持姿态、去除视频背景、输出透明通道"></textarea></label>
+            <div class="row">
+              <label>画布宽<input type="number" data-param="sprite_width" step="16" min="32"></label>
+              <label>画布高<input type="number" data-param="sprite_height" step="16" min="32"></label>
+              <label>Alpha 阈值<input type="number" data-param="alpha_threshold" min="0" max="255"></label>
+              <label>色键容差<input type="number" data-param="chroma_tolerance" min="10" max="200"></label>
+            </div>
+            <label>对齐方式<select data-param="align"><option value="bottom-center">脚底居中（推荐）</option><option value="center">正中心</option></select></label>
+            <label>组间比例<select data-param="sprite_scale_mode">
+              <option value="global">统一基准（推荐，切换动作不变大变小）</option>
+              <option value="group">每组各自撑满画布（画面更大）</option>
+            </select></label>
+            <label class="check"><input type="checkbox" data-param="trim_alpha"> 自动裁剪透明边（组内取公共边距）</label>
+            <button class="btn primary wide" data-run="sprites">重绘 / 抠图（按处理范围）</button>
+            <div id="spriteStats" class="stats muted">—</div>
+          </div>
+          <div class="card"><h3>质检</h3><div id="alphaReport" class="hint muted">—</div></div>
+        </div>
+        <h3 class="sec">最终精灵帧（按动作分组）</h3>
+        <div id="spriteGrid" class="group-list"></div>
+      </section>
+
+      <!-- 7 导出 -->
+      <section class="panel" data-panel="export" hidden>
+        <div class="panel-head"><h2>⑦ 预览与导出</h2></div>
+        <div class="card">
+          <div class="row">
+            <label class="scope-pick">导出范围<select data-param="export_group" id="exportScope" title="只导出某一段视频的那套文件，其它组已有的导出文件原样保留"></select></label>
+            <label>每行帧数<input type="number" data-param="sprite_columns" min="1" max="32"></label>
+            <label>预览 GIF FPS<input type="number" data-param="gif_fps" min="1" max="60"></label>
+          </div>
+          <button class="btn primary wide" data-run="export">生成导出文件（按导出范围）</button>
+        </div>
+        <h3 class="sec">每组一套：预览 + 下载</h3>
+        <div class="toolbar">
+          <button class="btn ghost" id="btnRefreshGif">↻ 刷新预览</button>
+        </div>
+        <div id="exportBox" class="group-list"></div>
+      </section>
+
+      <div id="running" class="running" hidden>
+        <span class="spin"></span><span id="runningText">任务运行中…</span>
+        <button id="btnCancel" class="btn ghost">取消</button>
+      </div>
+    </main>
+  </div>
+
+  <footer class="logbar" id="logbar">
+    <div class="log-resizer" id="logResizer" title="上下拖动调整日志高度；双击恢复默认"><i></i></div>
+    <div class="log-head">
+      <b>运行日志</b>
+      <span id="jobState" class="muted">空闲</span>
+      <span class="grow"></span>
+      <button id="btnLogShrink" class="btn ghost tiny" title="降低日志高度">－</button>
+      <button id="btnLogGrow" class="btn ghost tiny" title="增加日志高度">＋</button>
+      <button id="btnLogReset" class="btn ghost tiny" title="恢复默认高度">复位</button>
+      <button id="btnClearLog" class="btn ghost tiny">清空</button>
+    </div>
+    <pre id="log"></pre>
+  </footer>
+</div>
+
+<!-- 弹窗 -->
+<div id="modal" class="modal" hidden>
+  <div class="modal-card">
+    <h3 id="modalTitle">新建项目</h3>
+    <div id="modalBody"></div>
+    <div class="modal-foot"><button class="btn" id="modalCancel">取消</button><button class="btn primary" id="modalOk">确定</button></div>
+  </div>
+</div>
+
+<!-- 轻量提示 -->
+<div id="toast" class="toast" hidden></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
