@@ -6,6 +6,7 @@
 
 - 预先安装 **ComfyUI**
 - 如需自动改写提示词，可填写 **DeepSeek API KEY**
+- 需要将 **ffmpeg.exe** 文件放到 tools 目录
 
 ## 工作流
 
