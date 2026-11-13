@@ -16,9 +16,9 @@ CONFIG_FILE = ROOT / "config.json"
 
 DEFAULTS: dict = {
     # ---------- 远程 ComfyUI ----------
-    "comfy_url": "http://comfyui.vrke.cn:8080",
-    "comfy_user": "comfyui",
-    "comfy_password": "vrke",
+    "comfy_url": "http://127.0.0.1:8000",
+    "comfy_user": "",
+    "comfy_password": "",
     "comfy_subfolder": "spritemaker",   # /upload/image 的 subfolder
     "comfy_timeout": 60,                 # 普通 HTTP 超时（秒）
     "job_timeout": 3600,                 # 单个生成任务最长等待（秒）
