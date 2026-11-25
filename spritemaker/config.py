@@ -46,10 +46,13 @@ DEFAULTS: dict = {
     "workflows": {
         "t2i": "image_qwen_image_2_1_turbo_t2i.json",
         "i2i": "image_qwen_image_2_1_turbo_image_edit.json",
-        "i2v": "video_minimax_h3_i2v.json",
+        "i2v": "video_pika_h3_flex_fl2va.json",
     },
     # 视频工作流在界面里的显示名（可选，未列出时用文件名）
-    "workflow_labels": {"video_minimax_h3_i2v.json": "MiniMax H3 首尾帧"},
+    "workflow_labels": {
+        "video_pika_h3_flex_fl2va.json": "Pika H3 Flex FL2VA 首尾帧",
+        "video_minimax_h3_i2v.json": "MiniMax H3 首尾帧",
+    },
     "projects_dir": "projects",
     "web_dir": "web",
 

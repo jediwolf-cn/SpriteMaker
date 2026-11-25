@@ -54,10 +54,42 @@ def _pick(wf: dict, class_type: str, *, nid: str | None = None,
         return wf[nid]
     hits = [n for n in wf.values() if n.get("class_type") == class_type]
     if title:
-        narrow = [n for n in hits if title.lower() in str(n.get("_meta", {}).get("title", "")).lower()]
+        keys = (title,) if isinstance(title, str) else tuple(title)
+        narrow = [n for n in hits if any(
+            k.lower() in str(n.get("_meta", {}).get("title", "")).lower() for k in keys)]
         if narrow:
             hits = narrow
     return hits[0] if hits else None
+
+
+def _upstream(wf: dict, ref, class_type: str) -> tuple[str, dict] | None:
+    """沿输入连线一路回溯，找到指定类型的上游节点。
+
+    不同工作流的节点 ID 和标题都不一样，跟着连线走比猜 ID 可靠。
+    途经节点按 image → 其它单输入引用的顺序继续回溯（可穿过缩放节点）。
+    """
+    seen: set[str] = set()
+    for _ in range(8):
+        if not (isinstance(ref, list) and ref and isinstance(ref[0], str)):
+            return None
+        nid = ref[0]
+        if nid in seen or nid not in wf:
+            return None
+        seen.add(nid)
+        node = wf[nid]
+        if node.get("class_type") == class_type:
+            return nid, node
+        inputs = node.get("inputs") or {}
+        ref = inputs.get("image") or next(
+            (v for v in inputs.values()
+             if isinstance(v, list) and v and isinstance(v[0], str)), None)
+    return None
+
+
+def _upstream_load(wf: dict, ref) -> dict | None:
+    """沿 first_frame/last_frame 连线上溯，找到真正喂图的 LoadImage。"""
+    hit = _upstream(wf, ref, "LoadImage")
+    return hit[1] if hit else None
 
 
 def _by_id(wf: dict, nid: str, class_type: str) -> dict | None:
@@ -278,10 +310,20 @@ class WorkflowSet:
         """
         w = self.load_file(workflow) if workflow else self.load("i2v")
         gen = _video_gen(w)
-        first_load = _pick(w, "LoadImage", nid="114", title="首帧")
+        # 跟着 first_frame 的连线找首帧图：旧工作流首帧在 114、新工作流在 148，
+        # 标题也可能是中文「首帧」或英文「First frame」，只靠 ID/标题会选到尾帧节点。
+        first_load = (_upstream_load(w, (gen.get("inputs") or {}).get("first_frame"))
+                      or _pick(w, "LoadImage", nid="114", title=("首帧", "first frame")))
         if first_load is None:
             raise WorkflowError("视频工作流缺少 LoadImage（首帧）节点")
         first_load["inputs"]["image"] = first_name
+
+        # 缩放节点同样跟着 first_frame 连线找：新工作流的首帧缩放是 157，
+        # 旧的是 119，标题都一样，靠 ID 猜容易挑到尾帧那条缩放支路。
+        scale_hit = _upstream(w, (gen.get("inputs") or {}).get("first_frame"),
+                              "ImageScaleToTotalPixels")
+        first_scale = (scale_hit[1] if scale_hit else
+                       _pick(w, "ImageScaleToTotalPixels", nid="119"))
 
         gen["inputs"]["prompt"] = prompt
         if last_name:
@@ -290,7 +332,6 @@ class WorkflowSet:
                 "_meta": {"title": "尾帧"},
             }
             # 尾帧支路必须与首帧走完全相同的缩放参数，否则首尾尺寸不一致
-            first_scale = _pick(w, "ImageScaleToTotalPixels", nid="119")
             if first_scale is not None:
                 tail_inputs = copy.deepcopy(first_scale["inputs"])
                 tail_inputs["image"] = ["sm_tail_load", 0]
@@ -314,8 +355,17 @@ class WorkflowSet:
         if duration is not None:
             duration["inputs"]["value"] = float(seconds)
 
-        pixels = (_by_title(w, "PrimitiveFloat", "像素", "megapixel", "resolution", "清晰度")
-                  or _by_id(w, "127", "PrimitiveFloat"))
+        # 清晰度节点优先跟着缩放节点的 megapixels 连线找（新工作流是 156，旧的是 127）；
+        # 没有缩放节点的工作流再退回按标题 / 已知 ID 找。
+        pixels = None
+        if first_scale is not None:
+            hit = _upstream(w, (first_scale.get("inputs") or {}).get("megapixels"),
+                            "PrimitiveFloat")
+            if hit is not None:
+                pixels = hit[1]
+        if pixels is None:
+            pixels = (_by_title(w, "PrimitiveFloat", "像素", "megapixel", "resolution", "清晰度")
+                      or _by_id(w, "127", "PrimitiveFloat"))
         if pixels is not None and pixels is not duration:
             pixels["inputs"]["value"] = float(megapixels)
 
