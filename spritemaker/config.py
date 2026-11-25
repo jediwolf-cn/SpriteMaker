@@ -50,7 +50,7 @@ DEFAULTS: dict = {
     },
     # 视频工作流在界面里的显示名（可选，未列出时用文件名）
     "workflow_labels": {
-        "video_pika_h3_flex_fl2va.json": "Pika H3 Flex FL2VA 首尾帧",
+        "video_pika_h3_flex_fl2va.json": "Pika H3 Flex FL2VA",
         "video_minimax_h3_i2v.json": "MiniMax H3 首尾帧",
     },
     "projects_dir": "projects",
